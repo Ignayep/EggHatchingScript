@@ -1,0 +1,548 @@
+local ReplicatedStorage: ReplicatedStorage, Players: Players = game:GetService("ReplicatedStorage"), game:GetService("Players")
+local TweenService: TweenService, ContextActionService: ContextActionService = game:GetService("TweenService"), game:GetService("ContextActionService")
+local RunService: RunService = game:GetService("RunService")
+local Camera: Camera = game.Workspace.CurrentCamera
+local EggMachines: Folder = game.Workspace:WaitForChild("EggMachines")
+local PetModels: Folder = ReplicatedStorage:WaitForChild("PetModels")
+local LocalScripts: Folder = script.Parent -- Folder In PlayerGui
+local PlayerGui: PlayerGui = LocalScripts.Parent
+local EggSystemGui: ScreenGui = PlayerGui:WaitForChild("EggSystemGui")
+local FlashGui: ScreenGui = EggSystemGui:WaitForChild("FlashGui")
+local FlashFrame: Frame = FlashGui:WaitForChild("FlashFrame")
+local DisplayFrame: Frame = EggSystemGui:WaitForChild("DisplayFrame")
+local DisplayFrame2: Frame = EggSystemGui:WaitForChild("DisplayFrame2")
+local DisplayFrame3: Frame = EggSystemGui:WaitForChild("DisplayFrame3")
+local TextLabelPetName: TextLabel = DisplayFrame:WaitForChild("PetName")
+local TextLabelPetName2: TextLabel = DisplayFrame2:WaitForChild("PetName2")
+local TextLabelPetName3: TextLabel = DisplayFrame3:WaitForChild("PetName3")
+local EggBillboardGuiDefault: BillboardGui = ReplicatedStorage:WaitForChild("EggBillboardGuiDefault")
+local Player = Players.LocalPlayer
+local Character = Player.Character or Player.CharacterAdded:Wait()
+local RenderSteppedConnection: RBXScriptConnection = nil
+local PlayerAroundOfMachine = {}
+local CurrentEggBillboard = {}
+local Buying: boolean = false
+local AutomaticBuy: boolean = false
+--[[This Script is in itself a complete EggHatching System, from the creation of a foldable interface, showing 2D Displays of the Pets
+What does that egg machine give, ordering of pets based on their rarity, the creation of buttons, for Mobile Users and The Use of
+ContextActionService for Bindable Functions for the Convenience of PC Users. With Proximity-Based Interface Sample System
+of the Player, then we move on to the purchase of the machine, where the connections will be saved to keep them always active in case the player
+leaves or returns and finally shows a Fluid Animation of the Egg Opening and the Pet Obtained]]
+task.wait(0.2)
+local function chooseRandomItem(Pets) --[[Function to obtain an element in a table According to the Probability from 0% to 100%]]
+	local Chance = math.random(1,100)
+	local Counter = 0
+	for _, Pet in pairs(Pets) do
+		Counter = Counter + Pet.Rarity.Value
+		if Chance <= Counter then
+			return Pet:Clone()
+		end
+	end
+	chooseRandomItem(Pets)
+end
+local LerpTimes = {0.3, 0.275, 0.25, 0.25, 0.25, 0.15, 0.25, 0.15, 0.05,0.15,0.05,0.45,0.5, 0.1} --[[Table with times used in the animation. They are used to know how long the interpolation lasts between each point where the Egg is animated.]]
+local EndPointsCFrames = { CFrame.new(0, 0, -5 * 1.8), CFrame.new(0, 1.5, -5 * 1.8), CFrame.new(0, 0, -5 * 1.8),  --[[Table with Final CFrames used in the CFrame:Lerp(GoalCFrame) function to locate and move the Egg through interpolations]]
+	CFrame.new(0, 0.5, -5 * 1.8), CFrame.new(0, 0, -5 * 1.8), CFrame.new(0, 0.15, -5 * 1.8),
+	CFrame.new(0, 0, -5 * 1.8), CFrame.new(0, 0, -5 * 1.8) * CFrame.Angles(0,0, math.rad(15)), CFrame.new(0, 0, -5 * 1.8) * CFrame.Angles(0,0, math.rad(15)), 
+	CFrame.new(0, 0, -5 * 1.8) * CFrame.Angles(0,0, math.rad(-15)), CFrame.new(0, 0, -5 * 1.8) * CFrame.Angles(0,0, math.rad(-15)), CFrame.new(0, 0, -5 * 1.8)  *  CFrame.Angles(math.rad(10),math.rad(-180),math.rad(-5)), CFrame.new(0, 0 , -5 * 1.8)  * CFrame.Angles(math.rad(10),math.rad(7200),math.rad(-5)),
+	CFrame.new(0, 0, -5 * 1.8)  *  CFrame.Angles(math.rad(10),math.rad(360),math.rad(-5)) }
+local StartPointsCFrames = { CFrame.new(0, 7, -5 * 1.8), EndPointsCFrames[1], EndPointsCFrames[2],  --[[Table with Initial CFrames to interpolate the Egg]]
+	EndPointsCFrames[3], EndPointsCFrames[4], EndPointsCFrames[5],
+	EndPointsCFrames[6],EndPointsCFrames[7], EndPointsCFrames[8], 
+	EndPointsCFrames[9],EndPointsCFrames[10],EndPointsCFrames[11],EndPointsCFrames[12],EndPointsCFrames[13] }
+local LerpSizeTimes = { 0.15, 0.05, 0.15, 0.05, 0.45,0.5, 0.4 } --[[Table With times used for interpolation, but this time they are for the interpolations of Enlarging and shrinking the egg]]
+local EndSizes = { Vector3.new(1.25,1.25,1.25), Vector3.new(1.25,1.25,1.25), Vector3.new(1.5,1.5,1.5), Vector3.new(1.5,1.5,1.5), Vector3.new(0.5,0.5,0.5), Vector3.new(0.5,0.5,0.5),  Vector3.new(2,2,2) } --[[Table with Vectors3 that will be used to interpolate the size of the egg]]
+local StartSizes = { Vector3.new(1,1,1), EndSizes[1], EndSizes[2], EndSizes[3], EndSizes[4],EndSizes[5],EndSizes[6] } --[[Table with vectors that will be the previous sizes, starting from vector3.new(1,1,1) which is equivalent to 100% of the size or without modification]]
+local function ShowEggToPlayer(Pet: Model, Egg: MeshPart)  --[[General Description: Function that shows 1 Egg Only and 1 Pet]]                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       
+	EggSystemGui.Enabled = true --[[A ScreenGui is enabled that contains the Frames that the Pet obtained will show and a nested ScreenGui that contains a CFrame that covers the screen to simulate the Effect of a Flash]]
+	Egg.Parent = Camera
+	Egg.CanCollide = false --[[The egg is attached to the camera so that the player can see it, and its collision is also removed so that it does not collide with the player's character.]]
+	local EffectMesh: MeshPart = Egg:WaitForChild("EffectMesh") --[[Reference to a copy of the Egg but larger that contains ParticlesEffects, which will be activated at a certain time during the animation]]
+	EffectMesh.Transparency = 1 --[[Set the Egg used as an effect so that it is not visible at the beginning of the animation]]
+	local EffectParticles = EffectMesh:GetChildren() --[[ Get a list of particle effects]]
+	for _, ParticleEmitter in pairs(EffectParticles) do --[[Particles are disabled.]]
+		ParticleEmitter.Enabled = false
+	end
+	local StartTime = time() --[[An Initial time is established to go through the LerpTimes table and change between interpolation index]]
+	local NextIndx = 1 --[[Variable that contains the Index that increases with the course of position interpolations]]
+	local NextIndxSizes = 1 --[[Variable that contains the index that will increase as the size interpolations progress.]]
+	local StartTimeSize = 0 --[[Variable that will be used to store the time, where the size interpolations begin]]
+	local StartEggSize = Egg.Size --[[Reference to the initial or "Normal" size of the egg]]
+	local StartSizeEffectMesh = EffectMesh.Size--[[Reference to the initial or "Normal" size of the egg used as an effect]]
+	RenderSteppedConnection = RunService.RenderStepped:Connect(function(deltaTime) --[[RenderStepped is used to maintain smooth animation]]
+		local CurrentTime = time() - StartTime --[[Variable that stores the time from StartTime to the disconnection of the RenderStepped event.]]
+		local Alpha = CurrentTime / LerpTimes[NextIndx] --[[Alpha that goes from 0 to 1, which increases according to the elapsed time and the current interpolation time]]
+		local TargetCFrame = StartPointsCFrames[NextIndx]:Lerp(EndPointsCFrames[NextIndx], Alpha) --[[Position interpolation using CFrames and not just Vectors 3, to add rotations and similar effects]]
+		if Alpha <= 1 and NextIndx == 13 then --[["If" verification from Interpolation 1 to 13, where rebound effect is added, if not just movement]]
+			Egg:PivotTo(Camera.CFrame * TargetCFrame * CFrame.new(0, 0.05 * math.sin(time() * 22.2 * math.pi * 2),0) )
+		else
+			Egg:PivotTo(Camera.CFrame * TargetCFrame)
+		end
+		if Alpha >= 1 and NextIndx < 14 then --[["If" comprobation to increase the index and reset the Time, so that the Alpha starts from 0 and goes to 1 in the next interpolation]]
+			NextIndx += 1
+			Alpha = 0
+			StartTime = time()
+		end
+		if NextIndx ==  7 and EffectMesh.Transparency == 1 then --[[Checking whether to start size interpolations]]
+			for _, Particle in pairs(EffectParticles) do --[[Go through the table with the particles 1 time to start their effect]]
+				Particle.Enabled = true
+			end
+			EffectMesh.Transparency = 0.7 --[[The Effect Egg is slightly visible to simulate an aura effect]]
+		end
+		if NextIndx >= 8 and NextIndxSizes <= 7 then --[["If" comprobation to establish the sizes]]
+			if StartTimeSize == 0 then --[[Lo mismo que StartTime]]
+				StartTimeSize = time()
+			end
+			local CurrentTimeSize = time() - StartTimeSize --[[Lo mismo que currentTime]]
+			local AlphaSize = CurrentTimeSize / LerpSizeTimes[NextIndxSizes] --[[Lo mismo que Alpha]]
+			local TargetSize = StartSizes[NextIndxSizes]:Lerp(EndSizes[NextIndxSizes], AlphaSize) --[[Lo mismo que Interpolacion de CFrames pero de Vectores3]]
+			EffectMesh.Size = StartSizeEffectMesh * TargetSize  --[[Establecer el tamaño del huevo efecto]]
+			Egg.Size = StartEggSize * TargetSize --[[Establecer el tamaño del huevo]]
+			if AlphaSize >= 1 then --[["If" comprobation to increase the index and reset the Time, so that the Alpha starts from 0 and goes to 1 in the next interpolation]]
+				AlphaSize = 0
+				NextIndxSizes += 1
+				StartTimeSize = time()
+			end
+		end
+		if Alpha >= 0.5 and NextIndx == 14 then --[["IF" comprobation to end the animation and disconnect the event next to the destruction of the egg]]
+			RenderSteppedConnection:Disconnect()
+			Egg:Destroy()
+		end
+	end)
+	Egg.Destroying:Wait() --[[The egg's "Destroying" event is referenced and connected to the Wait() function to pause the code until the egg is destroyed, signaling the end of the animation and the disconnection of the RenderStepped event.]]
+	FlashGui.Enabled = true --[[Screen Gui that simulates the flash effect]]
+	DisplayFrame.Visible = true --[[Completely blank frame that simulates the Flash effect]]
+	TextLabelPetName.Visible = true --[[A TextLabel of the Display Frame that will contain the Pet becomes visible to show its name]]
+	TextLabelPetName.Text = Pet.Name --[[The Pet Name is set to the Previous Text Label]]
+	for _, Parts in pairs(Pet:GetChildren()) do --[[The table that will cover the Pet Model, to set its visible parts, so that they do not collide with the player character and anchored is set to true so that the physics do not act on them.]]
+		if Parts:IsA("BasePart") or Parts:IsA("MeshPart") then
+			Parts.CanCollide = false
+			Parts.Anchored = true
+			Parts.CastShadow = false
+		end
+	end
+	local EndCFramesPet = { CFrame.new(0,0 ,-Pet.PrimaryPart.Size.Z * 3) * CFrame.Angles(math.rad(0),math.rad(-180),0), CFrame.new(0,-8 ,-Pet.PrimaryPart.Size.Z * 3) * CFrame.Angles(math.rad(0),math.rad(-180),0) }
+	local StartCFramesPet = { CFrame.new(0,0 ,-Pet.PrimaryPart.Size.Z * 3) * CFrame.Angles(math.rad(0),math.rad(-180),0), EndCFramesPet[1] }
+	local LerpTimesPet = { 2, 1 }
+	local NextIndxPet = 1 --[[Same Tables with initial and final Cframes of Positions along with their respective lerpTimes but for the Pet]]
+	StartTime = time() --[[Same variable to reset initial time to current time]]
+	Pet.Parent = Camera --[[Match the Pet to the camera so that the player can see it]]
+	RenderSteppedConnection = RunService.RenderStepped:Connect(function(deltaTime) --[[RenderStepped for smooth animation]]
+		local CurrentTime = time() - StartTime --[[Variable para almacenar el Tiempo transcurrido]]
+		local Alpha = CurrentTime / LerpTimesPet[NextIndxPet] --[[Alpha ranging from 0 to 1 based on elapsed time and current LerpTime based on current index]]
+		local TargetCFrame = StartCFramesPet[NextIndxPet]:Lerp(EndCFramesPet[NextIndxPet], Alpha) --[[CFrame obtained through interpolation]]		
+		Pet:PivotTo(Camera.CFrame * TargetCFrame) --[[PivoTo() is used to move the Model and all its parts to the desired CFrame in this case the Interpolated CFrame]]
+		if Alpha <= 1 and NextIndxPet == 1 then --[["If" comprobation to perform a transparency interpolation of the completely blank Frame to simulate the flash effect]]
+			FlashFrame.BackgroundTransparency = math.clamp(Alpha,0,1)
+		end	
+		if Alpha >= 1 and NextIndxPet <= 1 then --[["If" comprobation to increase the index and reset the Time, so that the Alpha starts from 0 and goes to 1 in the next interpolation]]
+			Alpha = 0
+			NextIndxPet += 1
+			StartTime = time()
+			TextLabelPetName.Visible = false
+		end
+		if Alpha >= 1 and NextIndxPet == 2 then --[["If" comprobation to end the Pet Sample Animation, disconnect the RenderStepped Event connection and destroy the Pet]]
+			RenderSteppedConnection:Disconnect()
+			Pet:Destroy()		
+		end
+	end)
+	Pet.Destroying:Wait() --[[
+The pet's "Destroying" event is referenced and connected to the Wait() function to pause the code until the pet is destroyed, signaling the end of the animation and disconnection from the RenderStepped event.]]
+	FlashFrame.BackgroundTransparency = 1 --[[Finally reset the values ​​to their default properties]]
+	FlashGui.Enabled = false
+	EggSystemGui.Enabled = false
+	DisplayFrame.Visible = false
+	RenderSteppedConnection = nil
+	Buying = false --[[
+Debounce to be able to buy again]]
+end
+local function ShowThreeEggsToPlayer(Pet1, Pet2, Pet3, Egg)--[[General Description: Modified ShowEggToPlayer function, to show 3 Eggs and 3 Pets]] 
+	EggSystemGui.Enabled = true
+	local EggsMeshsCharacter: Folder = Character:FindFirstChild("EggsMeshs")
+	local EggMesh: Model = Egg
+	local EggMesh2: Model = Egg:Clone()
+	local EggMesh3: Model = Egg:Clone()
+	EggMesh.Parent = Camera
+	EggMesh2.Parent = Camera
+	EggMesh3.Parent = Camera
+	EggMesh.CanCollide = false
+	EggMesh2.CanCollide = false
+	EggMesh3.CanCollide = false
+	local EffectMesh: MeshPart = EggMesh:WaitForChild("EffectMesh")
+	local EffectMesh2: MeshPart = EggMesh2:WaitForChild("EffectMesh")
+	local EffectMesh3: MeshPart = EggMesh3:WaitForChild("EffectMesh")
+	local ElectricParticles = EffectMesh:GetChildren()
+	local ElectricParticles2 = EffectMesh2:GetChildren()
+	local ElectricParticles3 = EffectMesh3:GetChildren()
+	for _, Particle in pairs(ElectricParticles) do
+		Particle.Enabled = false
+	end
+	EffectMesh.Transparency = 1
+	for _, Particle in pairs(ElectricParticles2) do
+		Particle.Enabled = false
+	end
+	EffectMesh2.Transparency = 1
+	for _, Particle in pairs(ElectricParticles3) do
+		Particle.Enabled = false
+	end			
+	EffectMesh3.Transparency = 1
+	local StartTime = time()
+	local NextIndx = 1
+	local NextIndxSizes = 1 
+	local StartTimeSize = 0
+	local StartEggMeshSize = EggMesh.Size
+	local StartSizeEffectMesh = EffectMesh.Size
+	RenderSteppedConnection = RunService.RenderStepped:Connect(function(deltaTime)
+		local CurrentTime = time() - StartTime
+		local Alpha = CurrentTime / LerpTimes[NextIndx]
+		local TargetCFrame = StartPointsCFrames[NextIndx]:Lerp(EndPointsCFrames[NextIndx], Alpha) 
+		local TargetCFrame = StartPointsCFrames[NextIndx]:Lerp(EndPointsCFrames[NextIndx], Alpha)
+		local TargetCFrame = StartPointsCFrames[NextIndx]:Lerp(EndPointsCFrames[NextIndx], Alpha)
+		if Alpha <= 1 and NextIndx == 13 then
+			EggMesh:PivotTo(Camera.CFrame * TargetCFrame * CFrame.new(0, 0.05 * math.sin(time() * 22.2 * math.pi * 2),0) )
+			EggMesh2:PivotTo(Camera.CFrame * CFrame.new(5,0,0) * TargetCFrame * CFrame.new(0, 0.05 * math.sin(time() * 22.2 * math.pi * 2),0))
+			EggMesh3:PivotTo(Camera.CFrame * CFrame.new(-5,0,0) * TargetCFrame * CFrame.new(0, 0.05 * math.sin(time() * 22.2 * math.pi * 2),0) )
+		else
+			EggMesh:PivotTo(Camera.CFrame * TargetCFrame)
+			EggMesh2:PivotTo(Camera.CFrame * CFrame.new(5,0,0) * TargetCFrame)
+			EggMesh3:PivotTo(Camera.CFrame * CFrame.new(-5,0,0) * TargetCFrame)
+		end
+		if Alpha >= 1 and NextIndx < 14 then
+			NextIndx += 1
+			Alpha = 0
+			StartTime = time()
+		end
+		if NextIndx ==  7 and EffectMesh.Transparency == 1 then
+			for _, Particle in pairs(ElectricParticles) do
+				Particle.Enabled = true
+			end
+			EffectMesh.Transparency = 0.7
+			for _, Particle in pairs(ElectricParticles2) do
+				Particle.Enabled = true
+			end
+			EffectMesh2.Transparency = 0.7
+			for _, Particle in pairs(ElectricParticles3) do
+				Particle.Enabled = true
+			end			
+			EffectMesh3.Transparency = 0.7
+
+		end
+		if NextIndx >= 8 and NextIndxSizes <= 7 then
+			if StartTimeSize == 0 then
+				StartTimeSize = time()
+			end
+			local CurrentTimeSize = time() - StartTimeSize
+			local AlphaSize = CurrentTimeSize / LerpSizeTimes[NextIndxSizes]
+			local TargetSize = StartSizes[NextIndxSizes]:Lerp(EndSizes[NextIndxSizes], AlphaSize)
+			EggMesh.Size = StartEggMeshSize * TargetSize
+			EggMesh2.Size = StartEggMeshSize * TargetSize
+			EggMesh3.Size = StartEggMeshSize * TargetSize
+			EffectMesh.Size = StartSizeEffectMesh * TargetSize
+			EffectMesh2.Size = StartSizeEffectMesh * TargetSize
+			EffectMesh3.Size = StartSizeEffectMesh * TargetSize
+			if AlphaSize >= 1 then
+				AlphaSize = 0
+				NextIndxSizes += 1
+				StartTimeSize = time()
+			end
+		end
+		if Alpha >= 0.5 and NextIndx == 14 then
+			RenderSteppedConnection:Disconnect()
+			EggMesh:Destroy()
+			EggMesh2:Destroy()
+			EggMesh3:Destroy()
+		end
+	end)
+	EggMesh3.Destroying:Wait()
+	FlashGui.Enabled = true
+	DisplayFrame.Visible = true
+	DisplayFrame2.Visible = true
+	DisplayFrame3.Visible = true
+	TextLabelPetName.Visible = true
+	TextLabelPetName.Text = Pet1.Name
+	TextLabelPetName2.Visible = true
+	TextLabelPetName2.Text = Pet2.Name
+	TextLabelPetName3.Visible = true
+	TextLabelPetName3.Text = Pet3.Name
+	for _, Parts in pairs(Pet1:GetChildren()) do
+		if Parts:IsA("BasePart") or Parts:IsA("MeshPart") then
+			Parts.CanCollide = false
+			Parts.Anchored = true
+			Parts.CastShadow = false
+		end
+	end
+	for _, Parts in pairs(Pet2:GetChildren()) do
+		if Parts:IsA("BasePart") or Parts:IsA("MeshPart") then
+			Parts.CanCollide = false
+			Parts.Anchored = true
+			Parts.CastShadow = false
+		end
+	end
+	for _, Parts in pairs(Pet3:GetChildren()) do
+		if Parts:IsA("BasePart") or Parts:IsA("MeshPart") then
+			Parts.CanCollide = false
+			Parts.Anchored = true
+			Parts.CastShadow = false
+		end
+	end
+	local EndCFramesPet = { CFrame.new(0,0 , -4 * 2.5) * CFrame.Angles(math.rad(0),math.rad(-180),0), CFrame.new(0,-8 ,-4 * 2.5) * CFrame.Angles(math.rad(0),math.rad(-180),0) }
+	local StartCFramesPet = { CFrame.new(0,0 ,-4 * 2.5) * CFrame.Angles(math.rad(0),math.rad(-180),0), EndCFramesPet[1] }
+	local LerpTimesPet = { 2, 1 }
+	local NextIndxPet = 1
+	StartTime = time()
+	Pet1.Parent = Camera
+	Pet2.Parent = Camera
+	Pet3.Parent = Camera
+	RenderSteppedConnection = RunService.RenderStepped:Connect(function(deltaTime)
+		local CurrentTime = time() - StartTime
+		local Alpha = CurrentTime / LerpTimesPet[NextIndxPet]
+		local TargetCFrame = StartCFramesPet[NextIndxPet]:Lerp(EndCFramesPet[NextIndxPet], Alpha)		
+		Pet1:PivotTo(Camera.CFrame * TargetCFrame)
+		Pet2:PivotTo(Camera.CFrame * CFrame.new(8,0,0) * TargetCFrame * CFrame.Angles(0,math.rad(-15),0))
+		Pet3:PivotTo(Camera.CFrame * CFrame.new(-8,0,0) * TargetCFrame * CFrame.Angles(0,math.rad(15),0))
+		if Alpha <= 1 and NextIndxPet == 1 then
+			FlashFrame.BackgroundTransparency = math.clamp(Alpha,0,1)
+		end	
+		if Alpha >= 1 and NextIndxPet <= 1 then
+			Alpha = 0
+			NextIndxPet += 1
+			StartTime = time()
+			TextLabelPetName.Visible = false
+			TextLabelPetName2.Visible = false
+			TextLabelPetName3.Visible = false
+		end
+		if Alpha >= 1 and NextIndxPet == 2 then
+			RenderSteppedConnection:Disconnect()
+			Pet1:Destroy()	
+			Pet2:Destroy()
+			Pet3:Destroy()
+		end
+	end)
+	Pet3.Destroying:Wait()
+	FlashFrame.BackgroundTransparency = 1
+	FlashGui.Enabled = false
+	EggSystemGui.Enabled = false
+	DisplayFrame.Visible = false
+	DisplayFrame2.Visible = false
+	DisplayFrame3.Visible = false
+	TextLabelPetName.Visible = false
+	TextLabelPetName2.Visible = false
+	TextLabelPetName3.Visible = false
+	Buying = false
+end
+local function OnEPress(ActionName: string, InputState, _InputObject) --[[Function Linked to the E key to start the 1 Pet Purchase Animation]]
+	if InputState ~= Enum.UserInputState.Begin then return end
+	if AutomaticBuy then return end
+	if Buying then return end
+	Buying = true
+	local Pet: Model = nil
+	local Egg: MeshPart = EggMachines:WaitForChild(CurrentEggBillboard.Name).PrimaryPart:Clone()
+	for _, PetsType in pairs(PetModels:GetChildren()) do
+		if PetsType.Name == CurrentEggBillboard.Name  then
+			local Pets = PetsType:GetChildren()
+			repeat
+				Pet = chooseRandomItem(Pets) --Pet Model Cloned of ReplicatedStorage
+				task.wait()
+			until Pet ~= nil
+		end
+	end
+	ShowEggToPlayer(Pet, Egg)
+end
+local function OnRPress(ActionName: string, InputState, _InputObject) --[[Function Linked with ContextActionService to the "R" key to buy 3 Pets]]
+	if InputState ~= Enum.UserInputState.Begin then return end
+	if AutomaticBuy then return end
+	if Buying then return end
+	Buying = true
+	local Pet1: Model = nil
+	local Pet2: Model = nil
+	local Pet3: Model = nil
+	local Egg: MeshPart = EggMachines:WaitForChild(CurrentEggBillboard.Name).PrimaryPart:Clone()
+	for _, PetsType in pairs(PetModels:GetChildren()) do
+		if PetsType.Name == CurrentEggBillboard.Name  then
+			local Pets = PetsType:GetChildren()
+			repeat
+				if Pet1 == nil  then
+					Pet1 = chooseRandomItem(Pets)
+				end
+				if Pet2 == nil  then
+					Pet2 = chooseRandomItem(Pets)
+				end
+				if Pet3 == nil  then
+					Pet3 = chooseRandomItem(Pets)
+				end
+				task.wait()
+			until Pet1 ~= nil and Pet2 ~= nil and Pet3 ~= nil
+		end
+	end
+	ShowThreeEggsToPlayer(Pet1, Pet2, Pet3, Egg)
+end
+local function OnTPress(ActionName: string, InputState, _InputObject)--[[Function linked with ContextActionService to automatically buy 1 Pet every time the animation ends]]
+	if InputState ~= Enum.UserInputState.Begin then return end
+	if Buying then return end
+	if AutomaticBuy then return end
+	AutomaticBuy = true
+	while AutomaticBuy do
+		local Pet: Model = nil
+		local Egg: MeshPart = EggMachines:WaitForChild(CurrentEggBillboard.Name).PrimaryPart:Clone()
+		for _, PetsType in pairs(PetModels:GetChildren()) do
+			if PetsType.Name == CurrentEggBillboard.Name  then
+				local Pets = PetsType:GetChildren()
+				repeat
+					Pet = chooseRandomItem(Pets) --Pet Model Cloned of ReplicatedStorage
+					task.wait()
+				until Pet ~= nil
+			end
+		end
+		ShowEggToPlayer(Pet, Egg)
+	end
+end
+--[[I will summarize the For Cycle that follows here, for reasons of time and to avoid unnecessary comments, I think that the person who reads it can read it well.
+In short, a folder in the workspace that contains machine models will be browsed and a BillboardGui will be copied for each machine and
+will set its adornee in its respective PrimaryPart so that it is displayed in that specific PrimaryPart which is the Model Egg, then the
+button connections and also the Billboard Changed event to create Interpolations with the TweenService service to enlarge and
+create an opening or enlargement animation of the purchase interface, it will also be verified with the Changed event if the Character is nearby
+to activate the purchase, through connecting the buttons and with ContextActionService Bind the functions or unbind them and finally change
+the color of a specific Frame that contains the buttons to know which one the player will buy from]]
+for _, EggMachineModel in pairs(EggMachines:GetChildren()) do
+	local EggBillboard = EggBillboardGuiDefault:Clone()
+	EggBillboard.Parent = LocalScripts
+	EggBillboard.Adornee = EggMachineModel.PrimaryPart
+	EggBillboard.Name = EggMachineModel.Name
+	EggBillboard.Enabled = true
+	local ButtonsFrame: Frame = EggBillboard.ButtonsFrame
+	local ContainerFrame: Frame = EggBillboard.ContainerFrame
+	local PetFrameDefault: Frame = ContainerFrame.PetFrame
+	for _, TypePetsFolder in pairs(PetModels:GetChildren()) do
+		if TypePetsFolder.Name == EggMachineModel.Name then
+			if #TypePetsFolder:GetChildren() > 9 then warn("La cantidad de Pets Sobrepasan la cantidad maxima por maquina") return end
+			if #TypePetsFolder:GetChildren() == 0 then
+				PetFrameDefault:Destroy()
+				return
+			end
+			for _, PetModel in pairs(TypePetsFolder:GetChildren()) do
+				local PetFrame: Frame = PetFrameDefault:Clone()
+				local ViewportFrame: ViewportFrame = PetFrame:FindFirstChild("ViewportFrame")
+				local NewCamera = Instance.new("Camera", ViewportFrame)
+				NewCamera.Name = "Camera_"..PetModel.Name
+				ViewportFrame.CurrentCamera = NewCamera
+				NewCamera.FieldOfView = 20
+				NewCamera.CFrame = PetModel.PrimaryPart.CFrame * CFrame.new(0,0,-PetModel.PrimaryPart.Size.Z - 5) * CFrame.Angles(0,math.rad(180),0)
+				local CurrentPetModel = PetModel:Clone()
+				PetFrame.Parent = ContainerFrame
+				PetFrame.Name = CurrentPetModel.Name
+				CurrentPetModel.Parent = ViewportFrame
+				CurrentPetModel.PrimaryPart.Transparency = 1
+				local Rarity: TextLabel = PetFrame.Rarity
+				Rarity.Text = tostring(PetModel.Rarity.Value).."%"
+			end
+		end
+	end
+	PetFrameDefault:Destroy()
+	EggBillboard.Changed:Connect(function(property: string) 
+		if property ~= "AbsoluteSize" then return end
+		if (Character.PrimaryPart.Position - EggMachineModel.PrimaryPart.Position).Magnitude < 15  then
+			if PlayerAroundOfMachine[EggMachineModel.Name] then return end
+			PlayerAroundOfMachine[EggMachineModel.Name] = true
+			local TweenBigSize = TweenService:Create(ContainerFrame,TweenInfo.new(0.4,Enum.EasingStyle.Cubic), { Size = UDim2.new(0.7, 0, 0.7, 0) })
+			local TweenBigSize2 = TweenService:Create(ButtonsFrame,TweenInfo.new(0.4,Enum.EasingStyle.Cubic), { Size = UDim2.new(0.8, 0, 0.22, 0) })
+			TweenBigSize:Play(0)
+			TweenBigSize2:Play(0)
+			CurrentEggBillboard.Name = EggBillboard.Name
+			if CurrentEggBillboard.ButtonsFrame ~= nil  then
+				CurrentEggBillboard.ButtonsFrame.BackgroundColor3 = Color3.new(1, 1, 1)
+			end
+			CurrentEggBillboard.ButtonsFrame = ButtonsFrame
+			ButtonsFrame.BackgroundColor3 = Color3.new(0.333333, 1, 0)
+			ContextActionService:BindAction("EPress", OnEPress, false, Enum.KeyCode.E)
+			ContextActionService:BindAction("RPress", OnRPress, false, Enum.KeyCode.R)
+			ContextActionService:BindAction("TPress", OnTPress, false, Enum.KeyCode.T)
+		else
+			if PlayerAroundOfMachine[EggMachineModel.Name] == nil then return end
+			if PlayerAroundOfMachine[EggMachineModel.Name] then
+				local TweenDownSize = TweenService:Create(ContainerFrame,TweenInfo.new(0.4), { Size = UDim2.new(0, 0, 0, 0) })
+				local TweenDownSize2 = TweenService:Create(ButtonsFrame,TweenInfo.new(0.4), { Size = UDim2.new(0, 0, 0, 0) })
+				TweenDownSize2:Play(0)
+				TweenDownSize:Play(0)
+				PlayerAroundOfMachine[EggMachineModel.Name] = nil
+				if CurrentEggBillboard.Name == EggBillboard.Name  then
+					CurrentEggBillboard.Name = ""
+					CurrentEggBillboard.ButtonsFrame.BackgroundColor3 = Color3.new(1, 1, 1)
+					CurrentEggBillboard.ButtonsFrame = nil
+					ContextActionService:UnbindAction("EPress")
+					ContextActionService:UnbindAction("RPress")
+					ContextActionService:UnbindAction("TPress")
+					if AutomaticBuy  then
+						AutomaticBuy = false
+					end
+				end
+			end
+		end
+	end)
+	local EButton: TextButton = ButtonsFrame.E
+	local RButton: TextButton = ButtonsFrame.R
+	local TButton: TextButton = ButtonsFrame.T
+	EButton.Activated:Connect(function(InputObject: InputObject, clickCount: number) 
+		if AutomaticBuy then return end
+		if Buying then return end
+		Buying = true
+		local Pet: Model = nil
+		local Egg: MeshPart = EggMachines:WaitForChild(CurrentEggBillboard.Name).PrimaryPart:Clone()
+		for _, PetsType in pairs(PetModels:GetChildren()) do
+			if PetsType.Name == CurrentEggBillboard.Name  then
+				local Pets = PetsType:GetChildren()
+				repeat
+					Pet = chooseRandomItem(Pets) --Pet Model Cloned of ReplicatedStorage
+					task.wait()
+				until Pet ~= nil
+			end
+		end
+		ShowEggToPlayer(Pet, Egg)
+	end)
+	RButton.Activated:Connect(function(InputObject: InputObject, clickCount: number) 
+		if AutomaticBuy then return end
+		if Buying then return end
+		Buying = true
+		local Pet1: Model = nil
+		local Pet2: Model = nil
+		local Pet3: Model = nil
+		local Egg: MeshPart = EggMachines:WaitForChild(CurrentEggBillboard.Name).PrimaryPart:Clone()
+		for _, PetsType in pairs(PetModels:GetChildren()) do
+			if PetsType.Name == CurrentEggBillboard.Name  then
+				local Pets = PetsType:GetChildren()
+				repeat
+					if Pet1 == nil  then
+						Pet1 = chooseRandomItem(Pets)
+					end
+					if Pet2 == nil  then
+						Pet2 = chooseRandomItem(Pets)
+					end
+					if Pet3 == nil  then
+						Pet3 = chooseRandomItem(Pets)
+					end
+					task.wait()
+				until Pet1 ~= nil and Pet2 ~= nil and Pet3 ~= nil
+			end
+		end
+		ShowThreeEggsToPlayer(Pet1, Pet2, Pet3, Egg)
+	end)
+	TButton.Activated:Connect(function(InputObject: InputObject, clickCount: number) 
+		if Buying then return end
+		if AutomaticBuy then return end
+		AutomaticBuy = true
+		while AutomaticBuy do
+			local Pet: Model = nil
+			local Egg: MeshPart = EggMachines:WaitForChild(CurrentEggBillboard.Name).PrimaryPart:Clone()
+			for _, PetsType in pairs(PetModels:GetChildren()) do
+				if PetsType.Name == CurrentEggBillboard.Name  then
+					local Pets = PetsType:GetChildren()
+					repeat
+						Pet = chooseRandomItem(Pets) --Pet Model Cloned of ReplicatedStorage
+						task.wait()
+					until Pet ~= nil
+				end
+			end
+			ShowEggToPlayer(Pet, Egg)
+		end
+	end)
+end
+Final comments: Do not specifically detail the Purchase and Binding part of keys and buttons along with the detection system for time problems and the 3 Egg Sampler function since it is simply a modification of the 1 Egg Sampler
